@@ -92,7 +92,7 @@
         }
 
         // 2. 跨目录异步读取本地批量导出的大 JSON 数据包
-fetch('../data/macau_archive.json')
+fetch('data/macau_archive.json')
     .then(response => {
         if (!response.ok) throw new Error("无法读取数据包");
         return response.json();
