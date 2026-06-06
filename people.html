@@ -85,7 +85,7 @@
         // 核心学术清洗阈值（出场频次不少于10次）
         const MIN_COUNT = 10;
 
-        fetch('../data/macau_archive.json')
+        fetch('data/macau_archive.json')
             .then(response => {
                 if (!response.ok) throw new Error("无法读取語料庫");
                 return response.json();
