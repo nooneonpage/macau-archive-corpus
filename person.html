@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>人物詳情 - 澳門漢文文書語料庫</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .loading-tip { padding: 20px; color: #8c8880; text-align: center; font-style: italic; }
+        .hidden { display: none !important; }
+        
+        /* 面包屑导航样式复刻 */
+        .breadcrumb {
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #8c8880;
+        }
+        .breadcrumb a {
+            color: #2c5e3b;
+            text-decoration: none;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        
+        /* 翻页器统一样式 */
+        .pagination {
+            margin-top: 25px;
+            text-align: center;
+        }
+        .pagination a {
+            display: inline-block;
+            padding: 5px 12px;
+            border: 1px solid #e6dfcb;
+            background: #fdfcf7;
+            color: #2c5e3b;
+            text-decoration: none;
+            margin: 0 5px;
+            border-radius: 3px;
+        }
+        .pagination span {
+            color: #8c8880;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <div class="site-title">澳門漢文文書語料庫</div>
+            <div class="site-subtitle">Macau Chapas Sínicas Corpus</div>
+        </div>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">首頁</a></li>
+                <li><a href="documents.html">文書瀏覽</a></li>
+                <li><a href="search.html">高級檢索</a></li>
+                <li><a href="people.html">人物索引</a></li>
+                <li><a href="analysis.html" class="active">數據可視化</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <main style="margin-top: 0 !important; padding-top: 0 !important;">
+        <div class="container" style="margin-top: 0 !important; padding-top: 0 !important;">
+
+            <p class="breadcrumb" id="breadcrumb-box">
+                <a href="people.html">人物索引</a> &gt; <span id="breadcrumb-current">加載中...</span>
+            </p>
+
+            <div id="loading" class="loading-tip">正在鏈接語料庫，調取人物關聯文書...</div>
+
+            <div id="main-container" class="hidden" style="margin-top: 0 !important; padding-top: 5px !important;">
+                
+                <h1 id="person-name-title" style="margin-top: 0 !important; padding-top: 5px !important;">人物：加載中...</h1>
+                
+                <p>出現次數：<strong id="total-appearances">0</strong> 次</p>
+                <p>涉及文書：<strong id="total-documents">0</strong> 篇</p>
+
+                <h2 style="margin-top: 20px; border-bottom: 2px solid #e6dfcb; padding-bottom: 5px;">相關文書</h2>
+
+                <div class="document-list" id="list-box"></div>
+                
+                <div class="pagination" id="pagination-box"></div>
+                
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // 配置核心参数
+        const LIMIT = 20;
+        let currentPage = 1;
+        let targetName = "";
+        let relatedDocs = []; // 用于存放该人物关联且排序好的文书数组
+
+        // 1. 深度解析 URL 里的 ?name=xxx 和 ?page=X 参数
+        const urlParams = new URLSearchParams(window.location.search);
+        targetName = urlParams.get('name') ? urlParams.get('name').trim() : "";
+        let pageParam = parseInt(urlParams.get('page'));
+        if (pageParam && pageParam > 0) {
+            currentPage = pageParam;
+        }
+
+        // 安全拦截：若没有指定人物，直接报防御提示
+        if (!targetName) {
+            document.getElementById('loading').innerHTML = "❌ 未指定人物或参数丢失，无法调取深度谱系。";
+        } else {
+            // 开始请求大资产包进行内存跨表 Join 关联
+            fetch('../data/macau_archive.json')
+                .then(response => {
+                    if (!response.ok) throw new Error("无法读取數據庫");
+                    return response.json();
+                })
+                .then(rawData => {
+                    let mixedArray = [];
+                    if (Array.isArray(rawData)) {
+                        mixedArray = rawData;
+                    } else if (rawData && typeof rawData === 'object') {
+                        mixedArray = rawData.data || Object.values(rawData);
+                    }
+                    if (!Array.isArray(mixedArray)) mixedArray = Array.from(mixedArray);
+
+                    // 分别剥离出文书主表（documents）和人物关系表（parties）
+                    const documentsObj = mixedArray.find(item => item && item.type === 'table' && item.name === 'documents');
+                    const partiesObj = mixedArray.find(item => item && item.type === 'table' && item.name === 'parties');
+
+                    const docsData = documentsObj ? documentsObj.data : [];
+                    const partiesData = partiesObj ? partiesObj.data : [];
+
+                    // === A. 内存模拟原 SQL 的统计逻辑 ===
+                    // 1. 计算出现次数 (SELECT COUNT(*) FROM parties WHERE name = :name)
+                    let appearanceCount = 0;
+                    // 收集该人物名下关联的所有不重复的文书 ID (DISTINCT documents_id)
+                    const uniqueDocIds = new Set();
+
+                    partiesData.forEach(p => {
+                        if (p && p.name && p.name.trim() === targetName) {
+                            appearanceCount++;
+                            if (p.documents_id) {
+                                uniqueDocIds.add(String(p.documents_id));
+                            }
+                        }
+                    });
+
+                    // 2. 涉及文书数 (COUNT(DISTINCT documents_id))
+                    let docCountTotal = uniqueDocIds.size;
+
+                    // === B. 内存模拟 JOIN 关联与排序逻辑 ===
+                    // 复刻: FROM parties p JOIN documents d ON p.documents_id = d.id WHERE p.name = :name ORDER BY d.sort_order
+                    const unmatchedDocs = docsData.filter(d => d && d.id && uniqueDocIds.has(String(d.id)));
+                    // 严格复刻 SQL ORDER BY sort_order
+                    relatedDocs = [...unmatchedDocs].sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+
+                    if (relatedDocs.length === 0) {
+                        document.getElementById('loading').innerHTML = "❌ 未发现该人物名下的有效关联文书记录。";
+                        return;
+                    }
+
+                    // === C. 动态渲染界面静态变量 ===
+                    document.getElementById('breadcrumb-current').innerText = targetName;
+                    document.getElementById('person-name-title').innerText = "人物：" + targetName;
+                    document.getElementById('total-appearances').innerText = appearanceCount;
+                    document.getElementById('total-documents').innerText = docCountTotal;
+
+                    // 隐藏 loading 并解锁面板
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('main-container').classList.remove('hidden');
+
+                    // 触发核心列表渲染
+                    renderPersonDocsPage();
+                })
+                .catch(err => {
+                    document.getElementById('loading').innerHTML = "❌ 多表穿透计算失败，请检查数据文件路径。";
+                    console.error("人物详情页解析错误: ", err);
+                });
+        }
+
+        // 2. 核心关联文书分页渲染函数
+        function renderPersonDocsPage() {
+            const totalRows = relatedDocs.length;
+            const totalPages = Math.ceil(totalRows / LIMIT);
+
+            // 边界容错
+            if (currentPage < 1) currentPage = 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            // 计算分页切片位置 (LIMIT :limit OFFSET :offset)
+            const offset = (currentPage - 1) * LIMIT;
+            const pageData = relatedDocs.slice(offset, offset + LIMIT);
+
+            // 渲染列表条目
+            const listBox = document.getElementById('list-box');
+            let listHtml = '';
+
+            pageData.forEach(doc => {
+                // 原汁原味保留你交代的链接逻辑，带上 &person=当前人名，给详情页做后续无缝过渡支持
+                listHtml += `
+                    <div class="document-item">
+                        <h3>
+                            <a href="document.html?id=${encodeURIComponent(doc.id)}&person=${encodeURIComponent(targetName)}">
+                                [${escapeHtml(String(doc.id))}] ${escapeHtml(doc.title)}
+                            </a>
+                        </h3>
+                        <p>
+                            ${doc.year ? `年代：${escapeHtml(doc.year)}` : ''}
+                            ${doc.chapter ? ` ｜ 分類：${escapeHtml(doc.chapter)}` : ''}
+                        </p>
+                    </div>
+                `;
+            });
+            listBox.innerHTML = listHtml;
+
+            // 渲染翻页控制
+            const paginationBox = document.getElementById('pagination-box');
+            let navHtml = '';
+
+            if (totalPages > 1) {
+                if (currentPage > 1) {
+                    navHtml += `<a href="javascript:void(0)" onclick="goToPersonPage(${currentPage - 1})">← 上一頁</a> `;
+                }
+
+                navHtml += `<span>第 ${currentPage} 頁 / 共 ${totalPages} 頁</span> `;
+
+                if (currentPage < totalPages) {
+                    navHtml += `<a href="javascript:void(0)" onclick="goToPersonPage(${currentPage + 1})">下一頁 →</a>`;
+                }
+            }
+            paginationBox.innerHTML = navHtml;
+
+            // 自动置顶阅读
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 3. 翻页无刷新地址栏同步动作
+        function goToPersonPage(pageNumber) {
+            currentPage = pageNumber;
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + `?name=${encodeURIComponent(targetName)}&page=${currentPage}`;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+            renderPersonDocsPage();
+        }
+
+        // 安全防御
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+    </script>
+
+    <footer>
+        <div class="container">
+            澳門漢文文書語料庫 © 2026
+        </div>
+    </footer>
+
+</body>
+</html>

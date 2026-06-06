@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>人物索引 - 澳門漢文文書語料庫</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .loading-tip { padding: 20px; color: #8c8880; text-align: center; font-style: italic; }
+        .hidden { display: none !important; }
+        
+        /* 优雅的响应式人物标签云布局 */
+        .people-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .person-item {
+            background: #fdfcf7;
+            padding: 8px 15px;
+            border: 1px solid #e6dfcb;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+ /* 新代码：精准控制链接状态，彻底抹除蓝色 Bug */
+.person-item a, 
+.person-item a:visited {
+    color: #2c5e3b !important; /* 确保未点击与点击后，保持深绿 */
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.2s ease; /* 顺滑的变色过渡效果 */
+}
+
+.person-item a:hover, 
+.person-item a:active {
+    color: #d97706 !important; /* 鼠标悬停及点击瞬间，均呈现金色 */
+    text-decoration: underline;
+}
+        .person-item .count {
+            color: #8c8880;
+            font-size: 14px;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <div class="site-title">澳門漢文文書語料庫</div>
+            <div class="site-subtitle">Macau Chapas Sínicas Corpus</div>
+        </div>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">首頁</a></li>
+                <li><a href="documents.html">文書瀏覽</a></li>
+                <li><a href="search.html">高級檢索</a></li>
+                <li><a href="people.html">人物索引</a></li>
+                <li><a href="analysis.html" class="active">數據可視化</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <main style="margin-top: 0 !important; padding-top: 0 !important;">
+        <div class="container" style="margin-top: 0 !important; padding-top: 0 !important;">
+
+            <div id="loading" class="loading-tip">正在調取語料庫...</div>
+
+            <div id="main-container" class="hidden" style="margin-top: 0 !important; padding-top: 10px !important;">
+                
+                <h1 style="margin-top: 0 !important; padding-top: 5px !important; margin-bottom: 15px !important;">人物索引</h1>
+                <p>共收錄核心歷史人物 <strong id="people-count">0</strong> 位（頻次 ≥ 10次，已自動剔除模糊及污染數據）</p>
+
+                <div class="people-list" id="people-box"></div>
+                
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // 核心学术清洗阈值（出场频次不少于10次）
+        const MIN_COUNT = 10;
+
+        fetch('../data/macau_archive.json')
+            .then(response => {
+                if (!response.ok) throw new Error("无法读取語料庫");
+                return response.json();
+            })
+            .then(rawData => {
+                // 标准【数据清洗流】
+                let mixedArray = [];
+                if (Array.isArray(rawData)) {
+                    mixedArray = rawData;
+                } else if (rawData && typeof rawData === 'object') {
+                    mixedArray = rawData.data || Object.values(rawData);
+                }
+                if (!Array.isArray(mixedArray)) mixedArray = Array.from(mixedArray);
+
+                // 抽离出关系网人物表（parties）
+                const partiesObj = mixedArray.find(item => item && item.type === 'table' && item.name === 'parties');
+                const partiesData = partiesObj ? partiesObj.data : [];
+
+                // === 内存高逼真 SQL 模拟 + 学术深度清洗阶段 ===
+                const countsMap = {};
+                partiesData.forEach(p => {
+                    if (p && p.name) {
+                        const nameTrimmed = p.name.trim();
+                        
+                        // 【学术过滤器】：
+                        // 1. 名字不能为空
+                        // 2. 名字长度必须大于等于 2 个字
+                        // 3. 核心清洗：名字的最后一个字绝对不能是 “某” (如：张某、陈某)
+                        if (nameTrimmed !== '' && nameTrimmed.length >= 2 && !nameTrimmed.endsWith('某')) {
+                            countsMap[nameTrimmed] = (countsMap[nameTrimmed] || 0) + 1;
+                        }
+                    }
+                });
+
+                // 模拟 HAVING total >= 10 并转化为数组格式
+                const filteredPeople = [];
+                for (const name in countsMap) {
+                    if (countsMap[name] >= MIN_COUNT) {
+                        filteredPeople.push({
+                            name: name,
+                            total: countsMap[name]
+                        });
+                    }
+                }
+
+                // 模拟 ORDER BY total DESC, name ASC（频次降序，频次相同时按中文音序排列）
+                filteredPeople.sort((a, b) => {
+                    if (b.total !== a.total) {
+                        return b.total - a.total;
+                    }
+                    return a.name.localeCompare(b.name, 'zh');
+                });
+
+                if (filteredPeople.length === 0) {
+                    document.getElementById('loading').innerHTML = "❌ 未发现满足出场频次 ≥ 10 次且符合清洗条件的核心人物。";
+                    return;
+                }
+
+                // === 渲染到网页界面 ===
+                document.getElementById('people-count').innerText = filteredPeople.length;
+                
+                const peopleBox = document.getElementById('people-box');
+                let htmlContent = '';
+                
+                filteredPeople.forEach(person => {
+                    // 点击人名，跳转到详情页 person.html，用 URL 传递参数进行多表穿透
+                    htmlContent += `
+                        <div class="person-item">
+                            <a href="person.html?name=${encodeURIComponent(person.name)}">
+                                ${escapeHtml(person.name)}
+                            </a>
+                            <span class="count">(${person.total})</span>
+                        </div>
+                    `;
+                });
+                
+                peopleBox.innerHTML = htmlContent;
+
+                // 解锁隐藏
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('main-container').classList.remove('hidden');
+            })
+            .catch(err => {
+                document.getElementById('loading').innerHTML = "❌ 人物谱系激活失败，请检查数据通道。";
+                console.error("人物索引计算错误: ", err);
+            });
+
+        // 安全防御
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+    </script>
+
+    <footer>
+        <div class="container">
+            澳門漢文文書語料庫 © 2026
+        </div>
+    </footer>
+
+</body>
+</html>

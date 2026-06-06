@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>高級檢索 - 澳門漢文文書語料庫</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .loading-tip { padding: 10px; color: #8c8880; text-align: center; font-style: italic; }
+        .hidden { display: none !important; }
+        .highlight { background-color: #ffeb3b; color: #000; font-weight: bold; padding: 0 2px; border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <div class="site-title">澳門漢文文書語料庫</div>
+            <div class="site-subtitle">Macau Chapas Sínicas Corpus</div>
+        </div>
+    </header>
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">首頁</a></li>
+                <li><a href="documents.html">文書瀏覽</a></li>
+                <li><a href="search.html">高級檢索</a></li>
+                <li><a href="people.html">人物索引</a></li>
+                <li><a href="analysis.html" class="active">數據可視化</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <main>
+        <div class="container">
+
+            <div id="loading" class="loading-tip">正在調取語料庫...</div>
+
+            <div id="main-container" class="hidden" style="margin-top: 0; padding-top: 5px;">
+                <h1 style="margin-top: 0; padding-top: 5px;">高級檢索</h1>
+
+                <form class="search-form" id="search-form" onsubmit="handleSearchSubmit(event)">
+                    <div class="search-row">
+                        <label>關鍵詞</label>
+                        <input type="text" id="input-keyword" placeholder="標題、正文、地點、人物">
+                    </div>
+
+            <div class="search-row">
+                <label>年份</label>
+                <select id="select-year">
+                    <option value="">全部年份</option>
+                </select>
+            </div>
+
+            <div class="search-row">
+                <label>主題</label>
+                <select id="select-chapter">
+                    <option value="">全部主題</option>
+                </select>
+            </div>
+
+            <button type="submit" class="search-btn">開始檢索</button>
+        </form>
+
+        <div id="status-bar" class="hidden">
+            <p>共找到 <strong id="total-count">0</strong> 条記錄</p>
+        </div>
+
+        <div id="results-box"></div>
+
+        <div class="page-nav hidden" id="pagination-box"></div>
+    </div>
+
+    <script>
+        const PER_PAGE = 15; // 100% 还原原 PHP 代码里的 $perPage = 15
+        let currentPage = 1;
+        let db = { documents: [], parties: [], annotations: [] };
+        let filteredResults = []; // 存放当前检索条件命中的所有文档
+
+        // 1. 异步载入本地大 JSON 数据包
+        fetch('../data/macau_archive.json')
+            .then(response => {
+                if (!response.ok) throw new Error("数据文件加载失败");
+                return response.json();
+            })
+            .then(rawData => {
+                // 执行标准【超级容错与清洗逻辑】
+                let mixedArray = [];
+                if (Array.isArray(rawData)) {
+                    mixedArray = rawData;
+                } else if (rawData && typeof rawData === 'object') {
+                    mixedArray = rawData.data || Object.values(rawData);
+                }
+                if (!Array.isArray(mixedArray)) mixedArray = Array.from(mixedArray);
+
+                // 抽离数据并装载内存
+                const docsObj = mixedArray.find(i => i && i.type === 'table' && i.name === 'documents');
+                const partiesObj = mixedArray.find(i => i && i.type === 'table' && i.name === 'parties');
+                const annosObj = mixedArray.find(i => i && i.type === 'table' && i.name === 'annotations');
+
+                db.documents = docsObj ? docsObj.data : [];
+                db.parties = partiesObj ? partiesObj.data : [];
+                db.annotations = annosObj ? annosObj.data : [];
+
+                // 初始化高级检索的下拉菜单（对应原 SQL DISTINCT 提取）
+                initSearchOptions();
+
+                // 隐藏 loading，激活面板
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('main-container').classList.remove('hidden');
+
+                // 读取 URL 传入的检索参数（完美复刻刷新或链接分享参数记忆）
+                parseUrlAndSearch();
+            })
+            .catch(err => {
+                document.getElementById('loading').innerHTML = "❌ 检索引擎装载失败，请确保本地服务器环境开启。";
+                console.error(err);
+            });
+
+        // 2. 初始化下拉菜单（代替原 DISTINCT 年份和主题的 SQL）
+        function initSearchOptions() {
+            const yearSelect = document.getElementById('select-year');
+            const chapterSelect = document.getElementById('select-chapter');
+
+            // 提取去重年份并排序
+            const uniqueYears = [...new Set(db.documents.map(d => d.year).filter(y => y && y.trim() !== ''))].sort();
+            uniqueYears.forEach(y => {
+                const opt = new Option(y, y);
+                yearSelect.add(opt);
+            });
+
+            // 提取去重主题（卷次）并排序
+            const uniqueChapters = [...new Set(db.documents.map(d => d.chapter).filter(c => c && c.trim() !== ''))].sort();
+            uniqueChapters.forEach(c => {
+                const opt = new Option(c.trim(), c.trim());
+                chapterSelect.add(opt);
+            });
+        }
+
+        // 3. 核心穿透检索算法（代替原动态拼装 SQL 以及 LEFT JOIN 的复杂查询）
+        function executeMemorySearch(keyword, targetYear, targetChapter) {
+            // 如果所有参数都为空，则不展示结果（对应原 PHP 的 if 判定）
+            if (!keyword && !targetYear && !targetChapter) {
+                filteredResults = [];
+                document.getElementById('status-bar').classList.add('hidden');
+                document.getElementById('results-box').innerHTML = '';
+                document.getElementById('pagination-box').classList.add('hidden');
+                return;
+            }
+
+            const lowerKeyword = keyword.toLowerCase();
+
+            // 找出命中关键词的所有“历史人物”对应的 documents_id 集合（实现 LEFT JOIN 穿透检索）
+            const matchedDocIdsByPeople = new Set();
+            if (keyword) {
+                db.parties.forEach(p => {
+                    if (p.name && p.name.toLowerCase().includes(lowerKeyword)) {
+                        matchedDocIdsByPeople.add(String(p.documents_id));
+                    }
+                });
+            }
+
+            // 对全量文书执行高精度过滤 (.filter())
+            filteredResults = db.documents.filter(doc => {
+                // A. 年份精准卡位
+                if (targetYear && doc.year !== targetYear) return false;
+                
+                // B. 主题精准卡位
+                if (targetChapter && doc.chapter !== targetChapter) return false;
+
+                // C. 关键词多维扫描（标题、正文、地点、以及刚刚穿透的人物）
+                if (keyword) {
+                    const inTitle = doc.title && doc.title.toLowerCase().includes(lowerKeyword);
+                    const inContent = doc.content && doc.content.toLowerCase().includes(lowerKeyword);
+                    const inLocation = doc.location && doc.location.toLowerCase().includes(lowerKeyword);
+                    const inPeople = matchedDocIdsByPeople.has(String(doc.id));
+
+                    if (!inTitle && !inContent && !inLocation && !inPeople) return false;
+                }
+
+                return true;
+            });
+
+            // 严格按照 sort_order 升序，确保学术排列规范
+            filteredResults.sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+
+            // 更新共计找到多少条记录
+            document.getElementById('total-count').innerText = filteredResults.length;
+            document.getElementById('status-bar').classList.remove('hidden');
+
+            renderResultsPage();
+        }
+
+        // 4. 渲染检索结果与高亮效果（代替原 PHP 循环和 highlightKeyword 函数）
+        function renderResultsPage() {
+            const resultsBox = document.getElementById('results-box');
+            const keyword = document.getElementById('input-keyword').value.trim();
+            
+            if (filteredResults.length === 0) {
+                resultsBox.innerHTML = '<p class="loading-tip">未检索到符合条件的文书史料。</p>';
+                document.getElementById('pagination-box').classList.add('hidden');
+                return;
+            }
+
+            const totalPages = Math.ceil(filteredResults.length / PER_PAGE);
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            // 分页数据切片
+            const offset = (currentPage - 1) * PER_PAGE;
+            const pageData = filteredResults.slice(offset, offset + PER_PAGE);
+
+            let html = '';
+            pageData.forEach(row => {
+                // 100% 还原原 PHP 中的 mb_substr 截取前 120 字正文预览
+                let plainContent = row.content ? row.content.replace(/<[^>]*>/g, '') : '';
+                let contentPreview = plainContent.substring(0, 120);
+
+                html += `
+                    <div class="result-item">
+                        <h3>
+                            <a href="document.html?id=${encodeURIComponent(row.id)}">
+                                ${highlightKeyword(row.title, keyword)}
+                            </a>
+                        </h3>
+                        <p>${highlightKeyword(contentPreview, keyword)}...</p>
+                        <p>年份：${escapeHtml(row.year)} &nbsp;&nbsp;｜&nbsp;&nbsp; 地點：${escapeHtml(row.location)}</p>
+                        <p>
+                            主題：${escapeHtml(row.chapter)}
+                            ${row.section ? `&nbsp;&nbsp;｜&nbsp;&nbsp; 類別：${escapeHtml(row.section)}` : ''}
+                        </p>
+                    </div>
+                `;
+            });
+            resultsBox.innerHTML = html;
+
+            // 5. 渲染检索结果专属的分页器
+            renderPagination(totalPages);
+        }
+
+        // 关键词高亮替换核心（100% 契合你原 PHP 的 str_ireplace 逻辑）
+        function highlightKeyword(text, keyword) {
+            if (!text) return '';
+            if (!keyword) return escapeHtml(text);
+            
+            // 使用正则表达式进行不区分大小写的全局高亮替换
+            const escapedText = escapeHtml(text);
+            const escapedKeyword = escapeHtml(keyword);
+            const regex = new RegExp(escapedKeyword.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi');
+            return escapedText.replace(regex, match => `<span class="highlight">${match}</span>`);
+        }
+
+        // 渲染分页器布局
+        function renderPagination(totalPages) {
+            const pBox = document.getElementById('pagination-box');
+            if (totalPages <= 1) {
+                pBox.classList.add('hidden');
+                return;
+            }
+            pBox.classList.remove('hidden');
+
+            const kw = encodeURIComponent(document.getElementById('input-keyword').value.trim());
+            const yr = encodeURIComponent(document.getElementById('select-year').value);
+            const cp = encodeURIComponent(document.getElementById('select-chapter').value);
+
+            let html = '';
+            if (currentPage > 1) {
+                html += `<a href="javascript:void(0)" onclick="goToSearchPage(${currentPage - 1})">上一頁</a> `;
+            }
+            html += `<span class="page-current">${currentPage}</span> / ${totalPages} `;
+            if (currentPage < totalPages) {
+                html += `<a href="javascript:void(0)" onclick="goToSearchPage(${currentPage + 1})">下一頁</a>`;
+            }
+            pBox.innerHTML = html;
+        }
+
+        // 按钮及回车提交事件触发
+        function handleSearchSubmit(e) {
+            if (e) e.preventDefault();
+            currentPage = 1; // 检索新词时重置为第一页
+            
+            const kw = document.getElementById('input-keyword').value.trim();
+            const yr = document.getElementById('select-year').value;
+            const cp = document.getElementById('select-chapter').value;
+
+            // 将条件写入 URL 地址栏，实现参数长效记忆
+            const newUrl = `${window.location.pathname}?keyword=${encodeURIComponent(kw)}&year=${encodeURIComponent(yr)}&chapter=${encodeURIComponent(cp)}&page=1`;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+
+            executeMemorySearch(kw, yr, cp);
+        }
+
+        // 检索状态下的翻页切换
+        function goToSearchPage(pageNum) {
+            currentPage = pageNum;
+            const kw = document.getElementById('input-keyword').value.trim();
+            const yr = document.getElementById('select-year').value;
+            const cp = document.getElementById('select-chapter').value;
+
+            const newUrl = `${window.location.pathname}?keyword=${encodeURIComponent(kw)}&year=${encodeURIComponent(yr)}&chapter=${encodeURIComponent(cp)}&page=${currentPage}`;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+
+            renderResultsPage();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 解析 URL 参数执行默认搜索
+        function parseUrlAndSearch() {
+            const params = new URLSearchParams(window.location.search);
+            const kw = params.get('keyword') || '';
+            const yr = params.get('year') || '';
+            const cp = params.get('chapter') || '';
+            const pg = parseInt(params.get('page')) || 1;
+
+            if (kw || yr || cp) {
+                document.getElementById('input-keyword').value = kw;
+                document.getElementById('select-year').value = yr;
+                document.getElementById('select-chapter').value = cp;
+                currentPage = pg;
+                executeMemorySearch(kw, yr, cp);
+            }
+        }
+
+        // HTML 安全防御
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+<footer>
+        <div class="container">
+            澳門漢文文書語料庫 © 2026
+        </div>
+    </footer>
+</body>
+</html>

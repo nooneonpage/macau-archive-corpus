@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>首頁 - 澳門漢文文書語料庫</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        /* 确保未加载出数据前统计数字不会出现闪烁或空白 */
+        .stat-number { font-weight: bold; color: #2c5e3b; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <div class="site-title">澳門漢文文書語料庫</div>
+            <div class="site-subtitle">Macau Chapas Sínicas Corpus</div>
+        </div>
+    </header>
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">首頁</a></li>
+                <li><a href="documents.html">文書瀏覽</a></li>
+                <li><a href="search.html">高級檢索</a></li>
+                <li><a href="people.html">人物索引</a></li>
+                <li><a href="analysis.html" class="active">數據可視化</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <main>
+        <div class="container">
+            
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-number" id="doc-count">...</div>
+                    文書數量
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-number" id="people-count">...</div>
+                    注釋數量
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-number" id="time-span">...</div>
+                    時間跨度
+                </div>
+            </div>
+
+            <br>
+
+            <div class="card">
+                <h2>語料庫簡介</h2>
+                <p>歡迎使用澳門漢文文書語料庫。本語料庫致力于整理、數字化和系統化清代澳門地方歷史漢文文書檔案，爲學術研究提供便利的數字化檢索、人物脉絡譜系追踪以及多維數據分析支持。</p>
+                <p>您可以通過上方的導航欄進行文書的翻閱瀏覽、進行關鍵詞和主題的多維高級檢索，或通過人物索引查看特定歷史人物在諸多文書中的流轉與關聯。</p>
+            </div>
+
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            澳門漢文文書語料庫 © 2026
+        </div>
+    </footer>
+
+  
+       <script>
+        fetch('../data/macau_archive.json')
+            .then(response => {
+                if (!response.ok) throw new Error("无法读取史料资产包");
+                return response.json();
+            })
+            .then(rawData => {
+                let mixedArray = [];
+                if (Array.isArray(rawData)) {
+                    mixedArray = rawData;
+                } else if (rawData && typeof rawData === 'object') {
+                    mixedArray = rawData.data || Object.values(rawData);
+                }
+                if (!Array.isArray(mixedArray)) mixedArray = Array.from(mixedArray);
+
+                const documentsObj = mixedArray.find(item => item && item.type === 'table' && item.name === 'documents');
+                // 🌟 已修改：核心提取目標由原來的 'parties' 變更為 'annotations' 數據表
+                const annotationsObj = mixedArray.find(item => item && item.type === 'table' && item.name === 'annotations');
+
+                const docsData = documentsObj ? documentsObj.data : [];
+                // 🌟 已修改：讀取注釋對象下的數據，若不存在則給予空數組防禦
+                const annoData = annotationsObj ? annotationsObj.data : [];
+
+                // 1. 填入文书与注释总数
+                document.getElementById('doc-count').innerText = docsData.length;
+                // 🌟 已修改：將注釋的總數量精確填入對應的看板格子中
+                document.getElementById('people-count').innerText = annoData.length;
+
+                // 2. 听你的！直接抽取标准、安全的 year 字段，过滤出清代的正常年份
+                const years = docsData.map(doc => parseInt(doc.year))
+                                      .filter(yr => !isNaN(yr) && yr >= 1500 && yr <= 1920);
+
+                // 3. 计算并填入年份跨度
+                if (years.length > 0) {
+                    const startDate = Math.min(...years);
+                    const endDate = Math.max(...years);
+                    document.getElementById('time-span').innerText = `${startDate} - ${endDate}`;
+                } else {
+                    document.getElementById('time-span').innerText = "清代";
+                }
+            })
+            .catch(err => {
+                console.error("首页盘点失败: ", err);
+                document.getElementById('doc-count').innerText = "错误";
+                document.getElementById('people-count').innerText = "错误";
+                document.getElementById('time-span').innerText = "暂无记录";
+            });
+    </script>
+</body>
+</html>

@@ -1,0 +1,466 @@
+/* 全局 */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+    background:#f7f8f5;
+    color:#333;
+    line-height:1.8;
+}
+
+/* 顶部 */
+
+header{
+    background:#1f5f4a;
+    color:white;
+    padding:20px 0;
+}
+
+.container{
+    width:1200px;
+    margin:auto;
+}
+
+.site-title{
+    font-size:32px;
+    font-weight:bold;
+}
+
+.site-subtitle{
+    font-size:14px;
+    opacity:0.85;
+}
+
+/* 导航栏 */
+
+nav{
+    background:#2b7a5e;
+}
+
+nav ul{
+    list-style:none;
+    display:flex;
+}
+
+nav li{
+    padding:15px 25px;
+}
+
+nav a{
+    color:white;
+    text-decoration:none;
+}
+
+nav a:hover{
+    color:#f3d26a;
+}
+
+/* 主体 */
+
+main{
+    min-height:700px;
+    padding:40px 0;
+}
+
+/* 卡片 */
+
+.card{
+    background:white;
+    border-radius:10px;
+    padding:25px;
+    margin-bottom:25px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* 首页统计 */
+
+.stats{
+    display:flex;
+    gap:20px;
+}
+
+.stat-box{
+    flex:1;
+    background:white;
+    border-radius:10px;
+    padding:25px;
+    text-align:center;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+.stat-number{
+    font-size:32px;
+    color:#1f5f4a;
+    font-weight:bold;
+}
+
+/* 页脚 */
+
+footer{
+    background:#1f5f4a;
+    color:white;
+    text-align:center;
+    padding:20px;
+    margin-top:50px;
+}
+
+/* 文书列表 */
+
+.document-item{
+    border-bottom:1px solid #ddd;
+    padding:15px 0;
+}
+
+.document-item:last-child{
+    border:none;
+}
+
+.document-item a{
+    font-size:20px;
+    color:#1f5f4a;
+    text-decoration:none;
+}
+
+.document-item a:hover{
+    color:#d19c00;
+}
+/* 检索框 */
+
+.search-box{
+    margin-bottom:30px;
+}
+
+.search-box input{
+    width:500px;
+    padding:10px;
+    font-size:16px;
+}
+
+.search-box button{
+    padding:10px 20px;
+    background:#1f5f4a;
+    color:white;
+    border:none;
+    cursor:pointer;
+}
+
+/* 文书卡片 */
+
+.document-card{
+    background:white;
+    padding:25px;
+    margin-bottom:20px;
+    border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+
+.document-title{
+    font-size:24px;
+    margin-bottom:10px;
+}
+
+.document-title a{
+    text-decoration:none;
+    color:#1f5f4a;
+}
+
+.document-meta{
+    color:#666;
+    margin-bottom:10px;
+}
+
+.document-category{
+    color:#888;
+    margin-bottom:15px;
+}
+
+.read-more{
+    display:inline-block;
+    background:#2b7a5e;
+    color:white;
+    padding:8px 15px;
+    border-radius:5px;
+    text-decoration:none;
+}
+
+/* 分页 */
+
+.pagination{
+    text-align:center;
+    margin-top:40px;
+}
+
+.pagination a,
+.pagination span{
+    display:inline-block;
+    margin:0 3px;
+    padding:8px 14px;
+    border-radius:5px;
+    text-decoration:none;
+    border:1px solid #ccc;
+}
+
+.pagination .current{
+    background:#1f5f4a;
+    color:white;
+}
+/* 详情页 */
+
+.detail-card{
+    background:white;
+    padding:30px;
+    border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom:25px;
+}
+
+.document-heading{
+    font-size:32px;
+    color:#1f5f4a;
+    margin-bottom:20px;
+}
+
+.meta-table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.meta-table td{
+    border-bottom:1px solid #ddd;
+    padding:10px;
+}
+
+.content-box{
+    white-space:pre-wrap;
+    line-height:2;
+    font-size:17px;
+}
+
+.people-list li,
+.annotation-list li{
+    margin-bottom:10px;
+}
+
+.navigation{
+    margin-top:30px;
+}
+
+.navigation a{
+    display:inline-block;
+    padding:10px 15px;
+    margin-right:10px;
+    background:#2b7a5e;
+    color:white;
+    text-decoration:none;
+    border-radius:5px;
+}
+/* ===== 文书目录 ===== */
+
+.document-list{
+    margin-top:20px;
+}
+
+.document-item{
+    background:#fff;
+    padding:20px;
+    margin-bottom:15px;
+    border-radius:10px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.08);
+}
+
+.document-item h3{
+    margin-bottom:10px;
+}
+
+.document-item h3 a{
+    color:#1f5f4a;
+    text-decoration:none;
+}
+
+.document-item h3 a:hover{
+    text-decoration:underline;
+}
+
+.doc-meta{
+    color:#666;
+    margin-bottom:8px;
+}
+
+.doc-section{
+    color:#888;
+}
+
+.page-nav{
+    margin-top:30px;
+    text-align:center;
+}
+
+.page-nav a,
+.page-nav span{
+    display:inline-block;
+    padding:8px 14px;
+    margin:0 4px;
+    border-radius:5px;
+    text-decoration:none;
+    border:1px solid #ccc;
+}
+
+.page-current{
+    background:#1f5f4a;
+    color:white;
+}
+
+/* ===== 检索 ===== */
+
+.search-form{
+    background:#fff;
+    padding:25px;
+    border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom:30px;
+}
+
+.search-row{
+    margin-bottom:15px;
+}
+
+.search-row label{
+    display:inline-block;
+    width:100px;
+    font-weight:bold;
+}
+
+.search-row input,
+.search-row select{
+    padding:8px;
+    width:300px;
+}
+
+.search-btn{
+    background:#1f5f4a;
+    color:white;
+    border:none;
+    padding:10px 20px;
+    cursor:pointer;
+}
+
+.result-item{
+    background:white;
+    padding:20px;
+    margin-bottom:15px;
+    border-radius:10px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.08);
+}
+
+.result-item h3{
+    margin-bottom:10px;
+}
+
+.result-item a{
+    color:#1f5f4a;
+    text-decoration:none;
+}
+.highlight{
+    background:yellow;
+    font-weight:bold;
+}
+
+.result-item p{
+    line-height:1.8;
+}
+
+.highlight{
+    background:#ffe66d;
+    padding:1px 2px;
+    font-weight:bold;
+}
+
+.people-list {
+    margin-top: 20px;
+}
+
+.person-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #ddd;
+}
+
+.person-item a {
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.person-item a:hover {
+    text-decoration: underline;
+}
+
+.count {
+    color: #666;
+    margin-left: 5px;
+}
+
+.pagination {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.pagination a {
+    margin: 0 10px;
+    text-decoration: none;
+}
+
+.pagination span {
+    margin: 0 10px;
+}
+
+.person-item a,
+.person-item a:visited {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+.breadcrumb {
+    margin-bottom: 15px;
+    font-size: 14px;
+    color: #666;
+}
+
+.breadcrumb a {
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+/* ========================================================
+   强行打破海鸟与鱼的距离限制：全自动化头部紧凑补丁
+   ======================================================== */
+
+/* 1. 把头部、导航条、主体容器之间自带的所有默认透明间距全部归零 */
+header, nav, main {
+    margin: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* 2. 削减绿色导航条自身的上下厚度，让它变窄、变紧凑 */
+nav {
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+}
+
+/* 3. 最关键的隐形杀手：消除主体内容里第一个标题（如 h1）自带的冲天外边距 */
+main .container > *:first-child,
+main .container > .stats {
+    margin-top: 10px !important;  /* 这里的数字你可以随意调，5px、10px 都会让内容极度靠上 */
+}
+
+/* 4. 缩减首页特有的金色数据看板卡片顶部的空隙 */
+.stats {
+    margin-top: 10px !important;
+    margin-bottom: 10px !important;
+}

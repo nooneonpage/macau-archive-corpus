@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>文書詳情 - 澳門漢文文書語料庫</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        /* 额外微调：防止无服务器状态下未加载完出现空白或错位 */
+        .loading-tip {
+            padding: 20px;
+            color: #8c8880;
+            text-align: center;
+            font-style: italic;
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <div class="site-title">澳門漢文文書語料庫</div>
+            <div class="site-subtitle">Macau Chapas Sínicas Corpus</div>
+        </div>
+    </header>
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">首頁</a></li>
+                <li><a href="documents.html">文書瀏覽</a></li>
+                <li><a href="search.html">高級檢索</a></li>
+                <li><a href="people.html">人物索引</a></li>
+
+                <li><a href="analysis.html">數據可視化</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <main>
+        <div class="container">
+
+            <div class="breadcrumb" id="breadcrumb" style="margin-top: 10px; margin-bottom: 10px;">
+                </div>
+
+    <div id="loading" class="loading-tip">正在調取數據庫...</div>
+
+    <div id="main-container" class="hidden">
+        
+        <p class="breadcrumb" id="breadcrumb-box"></p>
+
+        <div class="detail-card">
+            <h1 class="document-heading" id="doc-title"></h1>
+            <table class="meta-table">
+                <tr><td class="meta-label">檔號</td><td id="meta-id"></td></tr>
+                <tr><td class="meta-label">卷次</td><td id="meta-chapter"></td></tr>
+                <tr><td class="meta-label">類別</td><td id="meta-section"></td></tr>
+                <tr><td class="meta-label">原始時間</td><td id="meta-date-original"></td></tr>
+                <tr><td class="meta-label">轉換時間</td><td id="meta-date-convert"></td></tr>
+                <tr><td class="meta-label">年份</td><td id="meta-year"></td></tr>
+                <tr><td class="meta-label">地點</td><td id="meta-location"></td></tr>
+                <tr><td class="meta-label">編號</td><td id="meta-page-number"></td></tr>
+            </table>
+        </div>
+
+        <div class="detail-card">
+            <h2>文書正文</h2>
+            <div class="content-box" id="doc-content" style="white-space: pre-wrap; line-height: 1.8;"></div>
+        </div>
+
+        <div class="detail-card">
+            <h2>相關人物</h2>
+            <div id="people-box"></div>
+        </div>
+
+        <div class="detail-card">
+            <h2>相關注釋</h2>
+            <div id="annotation-box"></div>
+        </div>
+
+        <div class="navigation" id="nav-box"></div>
+    </div>
+
+    <script>
+        // 1. 纯前端解析 URL 参数（代替 PHP 的 $_GET）
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentId = urlParams.get('id');
+        const currentPerson = urlParams.get('person') || '';
+
+        if (!currentId) {
+            document.getElementById('loading').innerHTML = "❌ 错误：缺少文书编号";
+            throw new Error("Missing ID");
+        }
+
+        // 2. 跨目录异步读取本地批量导出的大 JSON 数据包
+fetch('../data/macau_archive.json')
+    .then(response => {
+        if (!response.ok) throw new Error("无法读取数据包");
+        return response.json();
+    })
+    .then(rawData => {
+        // === 【超级容错与清洗逻辑】 ===
+        let mixedArray = [];
+
+        // 情况 A：如果数据本身就是标准数组
+        if (Array.isArray(rawData)) {
+            mixedArray = rawData;
+        } 
+        // 情况 B：如果 phpMyAdmin 把数据包在了某个对象属性里
+        else if (rawData && typeof rawData === 'object') {
+            // 如果它有 data 属性或者是以数据库名为 key 的对象，强行转为数组
+            mixedArray = rawData.data || Object.values(rawData);
+        }
+
+        // 确保 mixedArray 绝对是个数组，防止后面 .find() 崩溃
+        if (!Array.isArray(mixedArray)) {
+            mixedArray = Array.from(mixedArray);
+        }
+
+        console.log("清洗后的語料庫：", mixedArray); // 打印在控制台供你肉眼观测
+
+        // 从混合数组中按 table name 精准抽离出独立表
+        const documentsObj = mixedArray.find(item => item && item.type === 'table' && item.name === 'documents');
+        const partiesObj = mixedArray.find(item => item && item.type === 'table' && item.name === 'parties');
+        const annotationsObj = mixedArray.find(item => item && item.type === 'table' && item.name === 'annotations');
+
+        // 构建虚拟数据库对象（如果找不到，给个空数组以免引发后续报错）
+        const db = {
+            documents: documentsObj ? documentsObj.data : [],
+            parties: partiesObj ? partiesObj.data : [],
+            annotations: annotationsObj ? annotationsObj.data : []
+        };
+
+        // 兜底检查：如果找不到 documents 表，说明 JSON 结构跟预想的完全脱节，输出提示
+        if (db.documents.length === 0) {
+            console.error("警告：在 JSON 中未识别到名为 'documents' 的表数据，请检查 name 字段");
+        }
+
+        renderPage(db);
+    })
+    .catch(err => {
+        document.getElementById('loading').innerHTML = "❌ 数据清洗或调取失败，请在控制台（F12）查看红色具体报错。";
+        console.error(err);
+    });
+        // 3. 核心数据解析与页面渲染函数
+        function renderPage(db) {
+            // === A. 查询当前文书 (对应原 SQL SELECT * FROM documents WHERE id = :id) ===
+            const documentData = db.documents.find(doc => String(doc.id) === String(currentId));
+            
+            if (!documentData) {
+                document.getElementById('loading').innerHTML = "❌ 語料庫中未检索到该卷文書";
+                return;
+            }
+
+            // === B. 排序规则与上下篇查找 (对应原 SQL Prev / Next 逻辑) ===
+            // 按照你原有的 sort_order 进行高精度升序重排，确保前后翻页逻辑滴水不漏
+            const sortedDocs = [...db.documents].sort((a, b) => Number(a.sort_order) - Number(b.sort_order));
+            const currentIndex = sortedDocs.findIndex(doc => String(doc.id) === String(currentId));
+            
+            const prevDoc = currentIndex > 0 ? sortedDocs[currentIndex - 1] : null;
+            const nextDoc = currentIndex < sortedDocs.length - 1 ? sortedDocs[currentIndex + 1] : null;
+
+            // === C. 查询相关人物 (对应原 SQL parties JOIN) ===
+            const relatedPeople = db.parties.filter(p => String(p.documents_id) === String(currentId))
+                                            .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')); // 优雅的中文拼音排序
+
+            // === D. 查询相关注释 (对应原新加的 annotations 表关联) ===
+            const relatedAnnos = db.annotations ? db.annotations.filter(a => String(a.documents_id) === String(currentId)) : [];
+
+            // ==========================================
+            // 开始将数据映射注入到 HTML 节点中
+            // ==========================================
+            
+            // 渲染面包屑
+            const breadcrumbBox = document.getElementById('breadcrumb-box');
+            if (currentPerson) {
+                breadcrumbBox.innerHTML = `
+                    <a href="people.html">人物索引</a> > 
+                    <a href="person.html?name=${encodeURIComponent(currentPerson)}">${escapeHtml(currentPerson)}</a> > 
+                    ${escapeHtml(documentData.title)}
+                `;
+            } else {
+                breadcrumbBox.classList.add('hidden');
+            }
+
+            // 渲染基本元数据表
+            document.getElementById('doc-title').innerText = documentData.title;
+            document.getElementById('meta-id').innerText = documentData.id;
+            document.getElementById('meta-chapter').innerText = documentData.chapter || '';
+            document.getElementById('meta-section').innerText = documentData.section || '';
+            document.getElementById('meta-date-original').innerText = documentData.date_original || '';
+            document.getElementById('meta-date-convert').innerText = documentData.date_convert || '';
+            document.getElementById('meta-year').innerText = documentData.year || '';
+            document.getElementById('meta-location').innerText = documentData.location || '';
+            document.getElementById('meta-page-number').innerText = documentData.page_number || '';
+
+            // 渲染正文（使用 pre-wrap 样式可以天然实现 PHP 中 nl2br 的换行效果）
+            document.getElementById('doc-content').innerText = documentData.content;
+
+            // 渲染相关人物
+            const peopleBox = document.getElementById('people-box');
+            if (relatedPeople.length > 0) {
+                let html = '<ul class="people-list">';
+                relatedPeople.forEach(p => {
+                    html += `<li><strong>${escapeHtml(p.name)}</strong> （${escapeHtml(p.position || '暫無職務')}）</li>`;
+                });
+                html += '</ul>';
+                peopleBox.innerHTML = html;
+            } else {
+                peopleBox.innerHTML = '<p>暫無人物記錄</p>';
+            }
+
+            // 渲染相关注释
+            const annoBox = document.getElementById('annotation-box');
+            if (relatedAnnos.length > 0) {
+                let html = '<ul class="annotation-list">';
+                relatedAnnos.forEach(a => {
+                    html += `<li>${escapeHtml(a.anno)}</li>`;
+                });
+                html += '</ul>';
+                annoBox.innerHTML = html;
+            } else {
+                annoBox.innerHTML = '<p>暫無注釋</p>';
+            }
+
+            // 渲染底部上下篇翻页导航
+            const navBox = document.getElementById('nav-box');
+            let navHtml = '';
+            
+            if (prevDoc) {
+                navHtml += `<a href="document.html?id=${encodeURIComponent(prevDoc.id)}&person=${encodeURIComponent(currentPerson)}">← 上一篇</a> `;
+            }
+            
+            if (currentPerson) {
+                navHtml += `<a href="person.html?name=${encodeURIComponent(currentPerson)}">返回目錄</a> `;
+            } else {
+                navHtml += `<a href="documents.html">返回目錄</a> `;
+            }
+            
+            if (nextDoc) {
+                navHtml += `<a href="document.html?id=${encodeURIComponent(nextDoc.id)}&person=${encodeURIComponent(currentPerson)}">下一篇 →</a>`;
+            }
+            navBox.innerHTML = navHtml;
+
+            // 隐藏 loading 状态，展现完整页面
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('main-container').classList.remove('hidden');
+        }
+
+        // 安全防御：防止数据中带有特殊符号导致 HTML 渲染错乱
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+<footer>
+        <div class="container">
+            澳門漢文文書語料庫 © 2026
+        </div>
+    </footer>
+
+</body>
+</html>
