@@ -111,7 +111,7 @@
             document.getElementById('loading').innerHTML = "❌ 未指定人物或参数丢失，无法调取深度谱系。";
         } else {
             // 开始请求大资产包进行内存跨表 Join 关联
-            fetch('../data/macau_archive.json')
+            fetch('data/macau_archive.json')
                 .then(response => {
                     if (!response.ok) throw new Error("无法读取數據庫");
                     return response.json();
