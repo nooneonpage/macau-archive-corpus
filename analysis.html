@@ -872,7 +872,7 @@ function renderClusteringDimension() {
                 formatter: function(params) {
                     const path = params.treePathInfo;
                     let pathStr = (path && path.length > 1) ? path.slice(1).map(item => item.name).join(' ➔ ') : params.name;
-                    return `<div style="padding:4px 8px;"><strong>主題層級：</strong>${pathStr}<br/><strong>包含文獻：</strong>${params.value} 篇<br/><strong>體量占比：</strong>${params.percent}%</div>`;
+                    return `<div style="padding:4px 8px;"><strong>主題層級：</strong>${pathStr}<br/><strong>包含文獻：</strong>${params.value} 篇<br/></div>`;
                 }
             },
             series: {
