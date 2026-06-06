@@ -77,7 +77,7 @@
         let filteredResults = []; // 存放当前检索条件命中的所有文档
 
         // 1. 异步载入本地大 JSON 数据包
-        fetch('../data/macau_archive.json')
+        fetch('data/macau_archive.json')
             .then(response => {
                 if (!response.ok) throw new Error("数据文件加载失败");
                 return response.json();
