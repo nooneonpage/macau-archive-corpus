@@ -68,7 +68,7 @@
 
   
        <script>
-        fetch('../data/macau_archive.json')
+        fetch('data/macau_archive.json')
             .then(response => {
                 if (!response.ok) throw new Error("无法读取史料资产包");
                 return response.json();
